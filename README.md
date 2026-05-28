@@ -1,2 +1,5 @@
 # forward-user-bot
-A user bot for sending messages to Telegram chats
+
+# Юзер-бот для рассылки сообщений по чатам в Telegram
+
+.start - Запуск бота | Информация
