@@ -1,10 +1,5 @@
-import asyncio
-import random
-
 from telethon.errors import (
-    FloodWaitError,
-    ChatWriteForbiddenError,
-    UserBannedInChannelError
+    FloodWaitError
 )
 
 from core.db import (
@@ -12,10 +7,9 @@ from core.db import (
     remove_chat
 )
 
-from config import (
-    DELAY_MIN,
-    DELAY_MAX
-)
+from core.antiflood import AntiFlood
+from core.cleaner import BAD_ERRORS
+from core.stats import Stats
 
 
 async def send_message(
@@ -24,35 +18,38 @@ async def send_message(
     status_message=None
 ):
 
-    chats = await get_chats()
+    antiflood = AntiFlood()
 
-    success = 0
-    failed = 0
+    stats = Stats()
+
+    chats = await get_chats()
 
     for chat_id, title in chats:
 
+        stats.current_chat = title
+
         try:
+
             await client.forward_messages(
                 entity=chat_id,
                 messages=reply_message
             )
 
-            success += 1
+            stats.success += 1
 
-        except FloodWaitError as e:
-
-            print(f"FloodWait: {e.seconds}")
-
-            await asyncio.sleep(e.seconds)
-
-        except (
-            ChatWriteForbiddenError,
-            UserBannedInChannelError
-        ):
+        except BAD_ERRORS:
 
             await remove_chat(chat_id)
 
-            failed += 1
+            stats.deleted += 1
+
+            continue
+
+        except FloodWaitError as e:
+
+            stats.floods += 1
+
+            await antiflood.handle_flood(e)
 
             continue
 
@@ -60,18 +57,24 @@ async def send_message(
 
             print(f"{title}: {e}")
 
-            failed += 1
+            stats.failed += 1
 
         if status_message:
 
-            await status_message.edit(
-                f"✅ Успешно: {success}\n"
-                f"❌ Ошибок: {failed}"
-            )
+            try:
 
-        delay = random.randint(
-            DELAY_MIN,
-            DELAY_MAX
+                await status_message.edit(
+                    stats.render()
+                )
+
+            except:
+                pass
+
+        await antiflood.wait()
+
+    if status_message:
+
+        await status_message.edit(
+            "✅ Рассылка завершена\n\n"
+            + stats.render()
         )
-
-        await asyncio.sleep(delay)

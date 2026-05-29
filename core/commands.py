@@ -7,9 +7,63 @@ from core.db import (
 
 from core.sender import send_message
 
+from core.folders import (
+    get_folders,
+    import_folder
+)
+
 
 def register_handlers(client):
 
+    @client.on(events.NewMessage(pattern=r"\.start"))
+    async def start_handler(event):
+        
+        await event.reply("Forward-user-bot")
+
+    @client.on(events.NewMessage(pattern=r"\.folders"))
+    async def folders_handler(event):
+
+        folders = await get_folders(client)
+
+        if not folders:
+
+            await event.reply(
+                "❌ Папки не найдены"
+            )
+
+            return
+
+        text = "📂 Папки:\n\n"
+
+        for folder in folders:
+
+            text += (
+                f"ID: {folder['id']} | "
+                f"{folder['title']}\n"
+            )
+
+        await event.reply(text)
+
+    @client.on(events.NewMessage(pattern=r"\.import (\d+)"))
+    async def import_handler(event):
+
+        folder_id = int(
+            event.pattern_match.group(1)
+        )
+
+        msg = await event.reply(
+            "📥 Импорт папки..."
+        )
+
+        imported = await import_folder(
+            client,
+            folder_id
+        )
+
+        await msg.edit(
+            f"✅ Импортировано: {imported}"
+        )
+    
     @client.on(events.NewMessage(pattern=r"\.add"))
     async def add_chat_handler(event):
 
